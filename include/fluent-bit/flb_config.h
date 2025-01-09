@@ -271,7 +271,7 @@ struct flb_config {
 
 #ifdef FLB_SYSTEM_WINDOWS
     /* maxstdio (Windows) */
-    int maxstdio;
+    int win_maxstdio;
 #endif
 
     /* Co-routines */

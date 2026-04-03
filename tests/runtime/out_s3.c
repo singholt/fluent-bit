@@ -530,12 +530,71 @@ void flb_test_s3_putobject_retry_limit_semantics(void)
     unsetenv("TEST_PutObject_CALL_COUNT");
 }
 
+/*
+ * Test that the S3 plugin defaults retry_limit to 5 when not explicitly set.
+ */
+void flb_test_s3_default_retry_limit(void)
+{
+    int ret;
+    flb_ctx_t *ctx;
+    int in_ffd;
+    int out_ffd;
+    char *call_count_str;
+    int call_count;
+
+    setenv("FLB_S3_PLUGIN_UNDER_TEST", "true", 1);
+    setenv("TEST_PUT_OBJECT_ERROR", ERROR_ACCESS_DENIED, 1);
+
+    ctx = flb_create();
+
+    in_ffd = flb_input(ctx, (char *) "lib", NULL);
+    TEST_CHECK(in_ffd >= 0);
+    flb_input_set(ctx, in_ffd, "tag", "test", NULL);
+
+    out_ffd = flb_output(ctx, (char *) "s3", NULL);
+    TEST_CHECK(out_ffd >= 0);
+    flb_output_set(ctx, out_ffd, "match", "*", NULL);
+    flb_output_set(ctx, out_ffd, "region", "us-west-2", NULL);
+    flb_output_set(ctx, out_ffd, "bucket", "fluent", NULL);
+    flb_output_set(ctx, out_ffd, "use_put_object", "true", NULL);
+    flb_output_set(ctx, out_ffd, "total_file_size", "5M", NULL);
+    flb_output_set(ctx, out_ffd, "upload_timeout", "6s", NULL);
+    /* No Retry_Limit set — should default to 5 (MAX_UPLOAD_ERRORS) */
+
+    ret = flb_start(ctx);
+    TEST_CHECK(ret == 0);
+
+    unsetenv("TEST_PutObject_CALL_COUNT");
+
+    flb_lib_push(ctx, in_ffd, (char *) JSON_TD, (int) sizeof(JSON_TD) - 1);
+    sleep(8);
+
+    flb_stop(ctx);
+    flb_destroy(ctx);
+
+    call_count_str = getenv("TEST_PutObject_CALL_COUNT");
+    call_count = call_count_str ? atoi(call_count_str) : 0;
+
+    /*
+     * Default retry_limit=5: 1 initial attempt + 5 retries = 6 PutObject calls.
+     * With 1s timer ticks and 8s sleep, we expect at least 6 attempts.
+     */
+    TEST_CHECK_(call_count == 6,
+                "Expected 6 PutObject calls (default retry_limit=5), got %d",
+                call_count);
+
+    unsetenv("FLB_S3_PLUGIN_UNDER_TEST");
+    unsetenv("TEST_PUT_OBJECT_ERROR");
+    unsetenv("TEST_PutObject_CALL_COUNT");
+}
+
 /* Test list */
 TEST_LIST = {
     {"multipart_success", flb_test_s3_multipart_success },
     {"putobject_success", flb_test_s3_putobject_success },
     {"putobject_error", flb_test_s3_putobject_error },
     {"putobject_retry_limit_semantics", flb_test_s3_putobject_retry_limit_semantics },
+    {"default_retry_limit", flb_test_s3_default_retry_limit },
     {"create_upload_error", flb_test_s3_create_upload_error },
     {"upload_part_error", flb_test_s3_upload_part_error },
     {"complete_upload_error", flb_test_s3_complete_upload_error },

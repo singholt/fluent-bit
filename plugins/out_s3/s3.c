@@ -651,7 +651,9 @@ static int cb_s3_init(struct flb_output_instance *ins,
     ctx->retry_time = 0;
     ctx->upload_queue_success = FLB_FALSE;
 
-    if(ctx->ins->retry_limit < 0) {
+    /* Use S3's default retry limit unless the user explicitly set one */
+    if (flb_output_get_property("retry_limit", ins) == NULL ||
+        ctx->ins->retry_limit < 0) {
         ctx->ins->retry_limit = MAX_UPLOAD_ERRORS;
     }
 
